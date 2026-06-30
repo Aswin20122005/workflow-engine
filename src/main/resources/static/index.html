@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FlowMind — AI Workflow Engine</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="brand">
+    <span class="brand-icon">⚡</span>
+    <span class="brand-name">FlowMind</span>
+  </div>
+  <nav class="nav">
+    <a href="#" class="nav-item active" data-view="dashboard">
+      <span class="nav-icon">▦</span> Dashboard
+    </a>
+    <a href="#" class="nav-item" data-view="workflows">
+      <span class="nav-icon">⟳</span> Workflows
+    </a>
+    <a href="#" class="nav-item" data-view="logs">
+      <span class="nav-icon">≡</span> Execution Logs
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <span class="badge-ai">AI-Powered</span>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- DASHBOARD VIEW -->
+  <section id="view-dashboard" class="view active">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-sub">Real-time overview of your automation engine</p>
+      </div>
+      <button class="btn btn-primary" onclick="openCreateModal()">+ New Workflow</button>
+    </div>
+
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card"><div class="stat-num" id="stat-total">—</div><div class="stat-label">Total Workflows</div></div>
+      <div class="stat-card"><div class="stat-num accent-blue" id="stat-active">—</div><div class="stat-label">Active</div></div>
+      <div class="stat-card"><div class="stat-num accent-green" id="stat-completed">—</div><div class="stat-label">Completed</div></div>
+      <div class="stat-card"><div class="stat-num accent-red" id="stat-failed">—</div><div class="stat-label">Failed</div></div>
+    </div>
+
+    <div class="section-header">
+      <h2 class="section-title">All Workflows</h2>
+      <span class="section-hint">Click a workflow to manage steps & get AI suggestions</span>
+    </div>
+    <div id="workflow-cards" class="workflow-grid"></div>
+  </section>
+
+  <!-- WORKFLOWS VIEW -->
+  <section id="view-workflows" class="view">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Workflow Builder</h1>
+        <p class="page-sub" id="builder-subtitle">Select a workflow from the dashboard</p>
+      </div>
+      <button class="btn btn-ghost" onclick="switchView('dashboard')">← Back</button>
+    </div>
+
+    <div class="builder-layout">
+      <!-- Steps Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title" id="builder-wf-name">—</span>
+          <div class="panel-actions">
+            <button class="btn btn-sm btn-primary" onclick="openAddStepModal()">+ Add Step</button>
+            <button class="btn btn-sm btn-success" onclick="executeCurrentWorkflow()">▶ Run</button>
+          </div>
+        </div>
+        <div id="steps-list" class="steps-list"></div>
+      </div>
+
+      <!-- AI Panel -->
+      <div class="panel ai-panel">
+        <div class="panel-header">
+          <span class="panel-title">🤖 AI Advisor</span>
+          <button class="btn btn-sm btn-ghost" onclick="refreshSuggestion()">↻ Refresh</button>
+        </div>
+        <div id="ai-suggestion" class="ai-box">
+          <p class="ai-placeholder">Click "↻ Refresh" to get an AI-powered suggestion for this workflow.</p>
+        </div>
+
+        <!-- Logs inline -->
+        <div class="panel-header" style="margin-top:1.5rem">
+          <span class="panel-title">Execution Log</span>
+        </div>
+        <div id="wf-logs" class="log-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOGS VIEW -->
+  <section id="view-logs" class="view">
+    <div class="page-header">
+      <h1 class="page-title">Execution Logs</h1>
+    </div>
+    <div id="all-logs" class="log-list log-list--full"></div>
+  </section>
+
+</main>
+
+<!-- CREATE WORKFLOW MODAL -->
+<div class="modal-overlay" id="modal-create">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>New Workflow</h3>
+      <button class="modal-close" onclick="closeModal('modal-create')">✕</button>
+    </div>
+    <div class="modal-body">
+      <label class="field-label">Workflow Name</label>
+      <input type="text" id="wf-name-input" class="field-input" placeholder="e.g. Invoice Approval Pipeline"/>
+      <label class="field-label">Description</label>
+      <textarea id="wf-desc-input" class="field-input" rows="3" placeholder="What does this workflow automate?"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-create')">Cancel</button>
+      <button class="btn btn-primary" onclick="createWorkflow()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD STEP MODAL -->
+<div class="modal-overlay" id="modal-step">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add Step</h3>
+      <button class="modal-close" onclick="closeModal('modal-step')">✕</button>
+    </div>
+    <div class="modal-body">
+      <label class="field-label">Step Name</label>
+      <input type="text" id="step-name-input" class="field-input" placeholder="e.g. Manager Approval"/>
+      <label class="field-label">Step Type</label>
+      <select id="step-type-input" class="field-input">
+        <option value="MANUAL_TASK">Manual Task</option>
+        <option value="APPROVAL">Approval</option>
+        <option value="NOTIFICATION">Notification</option>
+        <option value="CONDITION_CHECK">Condition Check</option>
+        <option value="DATA_TRANSFORM">Data Transform</option>
+        <option value="EXTERNAL_API_CALL">External API Call</option>
+        <option value="AI_ANALYSIS">AI Analysis</option>
+      </select>
+      <label class="field-label">Assignee</label>
+      <input type="text" id="step-assignee-input" class="field-input" placeholder="e.g. finance-team"/>
+      <label class="field-label">Description</label>
+      <textarea id="step-desc-input" class="field-input" rows="2" placeholder="What does this step do?"></textarea>
+      <label class="field-label">Order</label>
+      <input type="number" id="step-order-input" class="field-input" value="1" min="1"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-step')">Cancel</button>
+      <button class="btn btn-primary" onclick="addStep()">Add Step</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

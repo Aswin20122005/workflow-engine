@@ -1,0 +1,17 @@
+package com.workflowengine.repository;
+
+import com.workflowengine.model.WorkflowStep;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface WorkflowStepRepository extends JpaRepository<WorkflowStep, Long> {
+
+    List<WorkflowStep> findByWorkflowIdOrderByStepOrder(Long workflowId);
+
+    List<WorkflowStep> findByWorkflowIdAndStatus(Long workflowId, WorkflowStep.StepStatus status);
+
+    void deleteByWorkflowId(Long workflowId);
+}
