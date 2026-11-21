@@ -115,6 +115,10 @@ public class AiSuggestionService {
             return "📉 Success rate below 50%. Analyze the CONDITION_CHECK steps for edge cases. Consider adding a DATA_TRANSFORM step before critical validations to normalize inputs and reduce failures.";
         }
 
+        if (steps.isEmpty()) {
+            return "🧩 This workflow has no steps yet. Start by adding the first task, for example a MANUAL_TASK to collect inputs, then an APPROVAL step before anything irreversible.";
+        }
+
         if (pendingSteps == steps.size()) {
             return "🚀 Workflow is ready to activate. Ensure all assignees are notified before activating. Consider adding a NOTIFICATION step at the start to broadcast workflow initiation to stakeholders.";
         }
