@@ -141,13 +141,30 @@ function renderLogs(containerId, logs) {
 }
 
 // ─── ACTIONS ──────────────────────────────────────────────────────────────────
+// fetch() only rejects on network errors; HTTP 4xx/5xx resolve normally. This helper
+// throws for non-2xx responses with the server's error message, so failures (409 "already
+// running", 400 validation errors, 404) are shown instead of a false success toast.
+async function api(url, options = {}) {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body.errors) message = Object.entries(body.errors).map(([f, m]) => `${f}: ${m}`).join(', ');
+      else if (body.error) message = body.error;
+    } catch { /* non-JSON error body */ }
+    throw new Error(message);
+  }
+  return res;
+}
+
 async function createWorkflow() {
   const name = document.getElementById('wf-name-input').value.trim();
   const description = document.getElementById('wf-desc-input').value.trim();
   if (!name) { showToast('Please enter a workflow name'); return; }
 
   try {
-    await fetch(API, {
+    await api(API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, description })
@@ -157,7 +174,7 @@ async function createWorkflow() {
     document.getElementById('wf-desc-input').value = '';
     showToast('Workflow created ✓');
     await loadDashboard();
-  } catch { showToast('Failed to create workflow'); }
+  } catch (e) { showToast(`Failed to create workflow: ${e.message}`); }
 }
 
 async function addStep() {
@@ -170,7 +187,7 @@ async function addStep() {
   if (!name) { showToast('Please enter a step name'); return; }
 
   try {
-    await fetch(`${API}/${currentWorkflowId}/steps`, {
+    await api(`${API}/${currentWorkflowId}/steps`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, type, assignee, description: desc, stepOrder: order })
@@ -181,22 +198,24 @@ async function addStep() {
     document.getElementById('step-desc-input').value = '';
     showToast('Step added ✓');
     await refreshBuilder();
-  } catch { showToast('Failed to add step'); }
+  } catch (e) { showToast(`Failed to add step: ${e.message}`); }
 }
 
 async function deleteStep(stepId) {
   if (!confirm('Remove this step?')) return;
-  await fetch(`${API}/steps/${stepId}`, { method: 'DELETE' });
-  showToast('Step removed');
+  try {
+    await api(`${API}/steps/${stepId}`, { method: 'DELETE' });
+    showToast('Step removed');
+  } catch (e) { showToast(e.message); }
   await refreshBuilder();
 }
 
 async function executeCurrentWorkflow() {
   if (!currentWorkflowId) return;
   try {
-    await fetch(`${API}/${currentWorkflowId}/execute?triggeredBy=user`, { method: 'POST' });
+    await api(`${API}/${currentWorkflowId}/execute?triggeredBy=user`, { method: 'POST' });
     showToast('▶ Execution started — watch steps update live');
-  } catch { showToast('Failed to trigger workflow'); }
+  } catch (e) { showToast(e.message); }
 }
 
 async function refreshSuggestion() {
