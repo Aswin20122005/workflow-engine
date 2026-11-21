@@ -60,7 +60,10 @@ public class WorkflowService {
         return workflowRepository.findById(id).map(existing -> {
             existing.setName(updated.getName());
             existing.setDescription(updated.getDescription());
-            existing.setStatus(updated.getStatus());
+            // Status is optional in the request; don't wipe it when the client omits it.
+            if (updated.getStatus() != null) {
+                existing.setStatus(updated.getStatus());
+            }
             return workflowRepository.save(existing);
         }).orElseThrow(() -> new WorkflowNotFoundException(id));
     }
