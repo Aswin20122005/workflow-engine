@@ -18,7 +18,7 @@ This project mirrors the core concepts behind business process automation platfo
 
 | Layer       | Technology                              |
 |-------------|------------------------------------------|
-| Backend     | Java 17, Spring Boot 3.2, Spring Data JPA|
+| Backend     | Java 21, Spring Boot 3.3, Spring Data JPA|
 | Database    | H2 (dev), MySQL (prod)                   |
 | AI Layer    | Anthropic Claude API (demo mode included)|
 | Frontend    | HTML5, CSS3, Vanilla JS                  |
@@ -30,7 +30,7 @@ This project mirrors the core concepts behind business process automation platfo
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Java 17+
+- Java 21+
 - Maven 3.8+
 
 ### Run locally (demo mode — no API key needed)
