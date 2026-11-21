@@ -1,7 +1,9 @@
 package com.workflowengine.model;
 import jakarta.persistence.*;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 @Entity
 @Table(name = "workflow_steps")
@@ -13,9 +15,9 @@ public class WorkflowStep {
     private Workflow workflow;
     @NotBlank @Column(nullable = false) private String name;
     @Column(columnDefinition = "TEXT") private String description;
-    @Enumerated(EnumType.STRING) @Column(nullable = false) private StepType type;
+    @NotNull @Enumerated(EnumType.STRING) @Column(nullable = false) private StepType type;
     @Enumerated(EnumType.STRING) @Column(nullable = false) private StepStatus status = StepStatus.PENDING;
-    @Column(name = "step_order", nullable = false) private int stepOrder;
+    @Min(1) @Column(name = "step_order", nullable = false) private int stepOrder;
     @Column(name = "assignee") private String assignee;
     @Column(name = "config_json", columnDefinition = "TEXT") private String configJson;
     @Column(name = "executed_at") private LocalDateTime executedAt;
