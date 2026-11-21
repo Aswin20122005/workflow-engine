@@ -78,8 +78,8 @@ public class WorkflowController {
     public ResponseEntity<Map<String, String>> executeWorkflow(
             @PathVariable Long id,
             @RequestParam(defaultValue = "user") String triggeredBy) {
-        workflowService.executeWorkflow(id, triggeredBy);
-        return ResponseEntity.ok(Map.of(
+        workflowService.startExecution(id, triggeredBy);
+        return ResponseEntity.accepted().body(Map.of(
             "status", "started",
             "message", "Workflow execution triggered successfully"
         ));

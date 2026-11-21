@@ -8,11 +8,11 @@ import com.workflowengine.model.WorkflowStep;
 import com.workflowengine.repository.ExecutionLogRepository;
 import com.workflowengine.repository.WorkflowRepository;
 import com.workflowengine.repository.WorkflowStepRepository;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,15 +25,18 @@ public class WorkflowService {
     private final WorkflowStepRepository stepRepository;
     private final ExecutionLogRepository logRepository;
     private final AiSuggestionService aiSuggestionService;
+    private final WorkflowExecutor workflowExecutor;
 
     public WorkflowService(WorkflowRepository workflowRepository,
                            WorkflowStepRepository stepRepository,
                            ExecutionLogRepository logRepository,
-                           AiSuggestionService aiSuggestionService) {
+                           AiSuggestionService aiSuggestionService,
+                           WorkflowExecutor workflowExecutor) {
         this.workflowRepository = workflowRepository;
         this.stepRepository = stepRepository;
         this.logRepository = logRepository;
         this.aiSuggestionService = aiSuggestionService;
+        this.workflowExecutor = workflowExecutor;
     }
 
     public List<Workflow> getAllWorkflows() {
@@ -92,78 +95,33 @@ public class WorkflowService {
         stepRepository.deleteById(stepId);
     }
 
-    @Async
-    public void executeWorkflow(Long workflowId, String triggeredBy) {
+    /**
+     * Validate and start a run. Marks the workflow ACTIVE here (synchronously) so a
+     * second request can't start a parallel run, then hands off to the async executor.
+     * Throws WorkflowNotFoundException (404) or WorkflowAlreadyRunningException (409);
+     * previously a missing id was only discovered on the background thread and the API
+     * still answered "started".
+     */
+    public void startExecution(Long workflowId, String triggeredBy) {
         Workflow workflow = workflowRepository.findById(workflowId)
             .orElseThrow(() -> new WorkflowNotFoundException(workflowId));
-
+        if (workflow.getStatus() == Workflow.WorkflowStatus.ACTIVE) {
+            throw new WorkflowAlreadyRunningException(workflowId);
+        }
         workflow.setStatus(Workflow.WorkflowStatus.ACTIVE);
         workflow.setTriggerCount(workflow.getTriggerCount() + 1);
         workflowRepository.save(workflow);
-
-        addLog(workflowId, workflow.getName(), null, null,
-               ExecutionLog.LogLevel.INFO, "Workflow execution started", triggeredBy);
-
-        List<WorkflowStep> steps = stepRepository.findByWorkflowIdOrderByStepOrder(workflowId);
-        boolean allSuccess = true;
-
-        for (WorkflowStep step : steps) {
-            try {
-                step.setStatus(WorkflowStep.StepStatus.IN_PROGRESS);
-                step.setExecutedAt(LocalDateTime.now());
-                stepRepository.save(step);
-
-                addLog(workflowId, workflow.getName(), step.getId(), step.getName(),
-                       ExecutionLog.LogLevel.INFO, "Executing step: " + step.getName(), triggeredBy);
-
-                simulateStepExecution(step);
-
-                step.setStatus(WorkflowStep.StepStatus.COMPLETED);
-                step.setCompletedAt(LocalDateTime.now());
-                step.setExecutionNotes("Completed successfully");
-                stepRepository.save(step);
-
-                addLog(workflowId, workflow.getName(), step.getId(), step.getName(),
-                       ExecutionLog.LogLevel.SUCCESS, "Step completed: " + step.getName(), triggeredBy);
-
-            } catch (Exception e) {
-                step.setStatus(WorkflowStep.StepStatus.FAILED);
-                step.setExecutionNotes("Error: " + e.getMessage());
-                stepRepository.save(step);
-
-                addLog(workflowId, workflow.getName(), step.getId(), step.getName(),
-                       ExecutionLog.LogLevel.ERROR, "Step failed: " + e.getMessage(), triggeredBy);
-                allSuccess = false;
-                break;
-            }
-        }
-
-        if (allSuccess) {
-            workflow.setStatus(Workflow.WorkflowStatus.COMPLETED);
-            workflow.setSuccessCount(workflow.getSuccessCount() + 1);
-            addLog(workflowId, workflow.getName(), null, null,
-                   ExecutionLog.LogLevel.SUCCESS, "Workflow completed successfully", triggeredBy);
+        // Start only after this transaction commits, so the executor sees the ACTIVE status.
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    workflowExecutor.execute(workflowId, triggeredBy);
+                }
+            });
         } else {
-            workflow.setStatus(Workflow.WorkflowStatus.FAILED);
-            addLog(workflowId, workflow.getName(), null, null,
-                   ExecutionLog.LogLevel.ERROR, "Workflow execution failed", triggeredBy);
+            workflowExecutor.execute(workflowId, triggeredBy);
         }
-
-        List<WorkflowStep> updatedSteps = stepRepository.findByWorkflowIdOrderByStepOrder(workflowId);
-        String suggestion = aiSuggestionService.getSuggestion(workflow, updatedSteps);
-        workflow.setAiSuggestion(suggestion);
-        workflowRepository.save(workflow);
-    }
-
-    private void simulateStepExecution(WorkflowStep step) throws InterruptedException {
-        int delay = switch (step.getType()) {
-            case APPROVAL -> 800;
-            case EXTERNAL_API_CALL -> 600;
-            case AI_ANALYSIS -> 1000;
-            case DATA_TRANSFORM -> 400;
-            default -> 300;
-        };
-        Thread.sleep(delay);
     }
 
     public String refreshAiSuggestion(Long workflowId) {

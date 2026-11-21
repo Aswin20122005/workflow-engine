@@ -15,4 +15,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> notFound(RuntimeException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
     }
+
+    @ExceptionHandler(WorkflowAlreadyRunningException.class)
+    public ResponseEntity<Map<String, String>> conflict(WorkflowAlreadyRunningException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    }
 }
