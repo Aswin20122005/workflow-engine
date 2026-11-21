@@ -94,6 +94,7 @@ class WorkflowServiceTest {
 
     @Test
     void deleteWorkflow_ShouldCallRepositories() {
+        when(workflowRepository.existsById(1L)).thenReturn(true);
         workflowService.deleteWorkflow(1L);
         verify(stepRepository).deleteByWorkflowId(1L);
         verify(workflowRepository).deleteById(1L);

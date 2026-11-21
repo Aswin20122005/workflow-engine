@@ -44,11 +44,7 @@ public class WorkflowController {
     @PutMapping("/{id}")
     public ResponseEntity<Workflow> updateWorkflow(@PathVariable Long id,
                                                     @Valid @RequestBody Workflow workflow) {
-        try {
-            return ResponseEntity.ok(workflowService.updateWorkflow(id, workflow));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.ok(workflowService.updateWorkflow(id, workflow));
     }
 
     @DeleteMapping("/{id}")
@@ -67,11 +63,7 @@ public class WorkflowController {
     @PostMapping("/{id}/steps")
     public ResponseEntity<WorkflowStep> addStep(@PathVariable Long id,
                                                  @Valid @RequestBody WorkflowStep step) {
-        try {
-            return ResponseEntity.ok(workflowService.addStep(id, step));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.ok(workflowService.addStep(id, step));
     }
 
     @DeleteMapping("/steps/{stepId}")

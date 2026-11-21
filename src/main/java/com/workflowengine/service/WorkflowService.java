@@ -1,5 +1,7 @@
 package com.workflowengine.service;
 
+import com.workflowengine.exception.StepNotFoundException;
+import com.workflowengine.exception.WorkflowNotFoundException;
 import com.workflowengine.model.ExecutionLog;
 import com.workflowengine.model.Workflow;
 import com.workflowengine.model.WorkflowStep;
@@ -56,21 +58,25 @@ public class WorkflowService {
             existing.setDescription(updated.getDescription());
             existing.setStatus(updated.getStatus());
             return workflowRepository.save(existing);
-        }).orElseThrow(() -> new RuntimeException("Workflow not found: " + id));
+        }).orElseThrow(() -> new WorkflowNotFoundException(id));
     }
 
     public void deleteWorkflow(Long id) {
+        if (!workflowRepository.existsById(id)) {
+            throw new WorkflowNotFoundException(id);
+        }
         stepRepository.deleteByWorkflowId(id);
         workflowRepository.deleteById(id);
     }
 
     public List<WorkflowStep> getStepsByWorkflow(Long workflowId) {
+        requireWorkflow(workflowId);
         return stepRepository.findByWorkflowIdOrderByStepOrder(workflowId);
     }
 
     public WorkflowStep addStep(Long workflowId, WorkflowStep step) {
         Workflow workflow = workflowRepository.findById(workflowId)
-            .orElseThrow(() -> new RuntimeException("Workflow not found: " + workflowId));
+            .orElseThrow(() -> new WorkflowNotFoundException(workflowId));
         step.setWorkflow(workflow);
         step.setStatus(WorkflowStep.StepStatus.PENDING);
         WorkflowStep saved = stepRepository.save(step);
@@ -80,13 +86,16 @@ public class WorkflowService {
     }
 
     public void deleteStep(Long stepId) {
+        if (!stepRepository.existsById(stepId)) {
+            throw new StepNotFoundException(stepId);
+        }
         stepRepository.deleteById(stepId);
     }
 
     @Async
     public void executeWorkflow(Long workflowId, String triggeredBy) {
         Workflow workflow = workflowRepository.findById(workflowId)
-            .orElseThrow(() -> new RuntimeException("Workflow not found"));
+            .orElseThrow(() -> new WorkflowNotFoundException(workflowId));
 
         workflow.setStatus(Workflow.WorkflowStatus.ACTIVE);
         workflow.setTriggerCount(workflow.getTriggerCount() + 1);
@@ -159,7 +168,7 @@ public class WorkflowService {
 
     public String refreshAiSuggestion(Long workflowId) {
         Workflow workflow = workflowRepository.findById(workflowId)
-            .orElseThrow(() -> new RuntimeException("Workflow not found"));
+            .orElseThrow(() -> new WorkflowNotFoundException(workflowId));
         List<WorkflowStep> steps = stepRepository.findByWorkflowIdOrderByStepOrder(workflowId);
         String suggestion = aiSuggestionService.getSuggestion(workflow, steps);
         workflow.setAiSuggestion(suggestion);
@@ -168,6 +177,7 @@ public class WorkflowService {
     }
 
     public List<ExecutionLog> getLogsForWorkflow(Long workflowId) {
+        requireWorkflow(workflowId);
         return logRepository.findByWorkflowIdOrderByCreatedAtDesc(workflowId);
     }
 
@@ -183,6 +193,12 @@ public class WorkflowService {
             "failed", workflowRepository.countByStatus(Workflow.WorkflowStatus.FAILED),
             "draft", workflowRepository.countByStatus(Workflow.WorkflowStatus.DRAFT)
         );
+    }
+
+    private void requireWorkflow(Long workflowId) {
+        if (!workflowRepository.existsById(workflowId)) {
+            throw new WorkflowNotFoundException(workflowId);
+        }
     }
 
     private void addLog(Long workflowId, String workflowName, Long stepId, String stepName,
