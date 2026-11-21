@@ -123,4 +123,10 @@ class WorkflowApiIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.total").isNumber());
     }
+
+    @Test
+    void healthEndpointIsUpAndOtherActuatorEndpointsAreHidden() throws Exception {
+        mvc.perform(get("/actuator/health")).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("UP"));
+        mvc.perform(get("/actuator/env")).andExpect(status().isNotFound());
+    }
 }
