@@ -23,6 +23,9 @@ public class AiSuggestionService {
     @Value("${ai.api.url:https://api.anthropic.com/v1/messages}")
     private String apiUrl;
 
+    @Value("${ai.api.model:claude-haiku-5-5}")
+    private String model;
+
     public AiSuggestionService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
         this.webClient = webClientBuilder.build();
         this.objectMapper = objectMapper;
@@ -42,7 +45,7 @@ public class AiSuggestionService {
             String prompt = buildPrompt(workflow, steps);
 
             Map<String, Object> requestBody = Map.of(
-                "model", "claude-3-haiku-20240307",
+                "model", model,
                 "max_tokens", 300,
                 "messages", List.of(
                     Map.of("role", "user", "content", prompt)
