@@ -5,7 +5,11 @@ import com.workflowengine.model.WorkflowStep;
 import com.workflowengine.repository.ExecutionLogRepository;
 import com.workflowengine.repository.WorkflowRepository;
 import com.workflowengine.repository.WorkflowStepRepository;
+import com.workflowengine.exception.StepNotFoundException;
+import com.workflowengine.exception.WorkflowAlreadyRunningException;
+import com.workflowengine.exception.WorkflowNotFoundException;
 import com.workflowengine.service.AiSuggestionService;
+import com.workflowengine.service.WorkflowExecutor;
 import com.workflowengine.service.WorkflowService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +32,7 @@ class WorkflowServiceTest {
     @Mock WorkflowStepRepository stepRepository;
     @Mock ExecutionLogRepository logRepository;
     @Mock AiSuggestionService aiSuggestionService;
+    @Mock WorkflowExecutor workflowExecutor;
 
     @InjectMocks WorkflowService workflowService;
 
@@ -113,5 +118,61 @@ class WorkflowServiceTest {
         Workflow result = workflowService.updateWorkflow(1L, updated);
         assertEquals("Updated Name", result.getName());
         assertEquals("Updated Desc", result.getDescription());
+    }
+
+    @Test
+    void updateWorkflow_KeepsStatusWhenOmitted() {
+        Workflow updated = new Workflow();
+        updated.setName("Renamed");
+        updated.setStatus(null);
+        when(workflowRepository.findById(1L)).thenReturn(Optional.of(sampleWorkflow));
+        when(workflowRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertEquals(Workflow.WorkflowStatus.DRAFT, workflowService.updateWorkflow(1L, updated).getStatus());
+    }
+
+    @Test
+    void updateWorkflow_MissingThrowsNotFound() {
+        when(workflowRepository.findById(99L)).thenReturn(Optional.empty());
+        assertThrows(WorkflowNotFoundException.class, () -> workflowService.updateWorkflow(99L, new Workflow()));
+    }
+
+    @Test
+    void deleteWorkflow_MissingThrowsNotFound() {
+        when(workflowRepository.existsById(99L)).thenReturn(false);
+        assertThrows(WorkflowNotFoundException.class, () -> workflowService.deleteWorkflow(99L));
+        verify(stepRepository, never()).deleteByWorkflowId(any());
+    }
+
+    @Test
+    void deleteStep_MissingThrowsNotFound() {
+        when(stepRepository.existsById(5L)).thenReturn(false);
+        assertThrows(StepNotFoundException.class, () -> workflowService.deleteStep(5L));
+    }
+
+    @Test
+    void startExecution_MarksActiveCountsTriggerAndDispatches() {
+        when(workflowRepository.findById(1L)).thenReturn(Optional.of(sampleWorkflow));
+        workflowService.startExecution(1L, "user");
+
+        assertEquals(Workflow.WorkflowStatus.ACTIVE, sampleWorkflow.getStatus());
+        assertEquals(1, sampleWorkflow.getTriggerCount());
+        verify(workflowExecutor).execute(1L, "user");
+    }
+
+    @Test
+    void startExecution_AlreadyRunningIsRejected() {
+        sampleWorkflow.setStatus(Workflow.WorkflowStatus.ACTIVE);
+        when(workflowRepository.findById(1L)).thenReturn(Optional.of(sampleWorkflow));
+
+        assertThrows(WorkflowAlreadyRunningException.class, () -> workflowService.startExecution(1L, "user"));
+        verify(workflowExecutor, never()).execute(any(), any());
+    }
+
+    @Test
+    void startExecution_MissingWorkflowIsRejectedBeforeDispatch() {
+        when(workflowRepository.findById(99L)).thenReturn(Optional.empty());
+        assertThrows(WorkflowNotFoundException.class, () -> workflowService.startExecution(99L, "user"));
+        verify(workflowExecutor, never()).execute(any(), any());
     }
 }
