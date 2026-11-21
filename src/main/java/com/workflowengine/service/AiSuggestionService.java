@@ -4,17 +4,24 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workflowengine.model.Workflow;
 import com.workflowengine.model.WorkflowStep;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class AiSuggestionService {
 
-    private final WebClient webClient;
+    private static final Logger log = LoggerFactory.getLogger(AiSuggestionService.class);
+
+    private final RestClient restClient;
     private final ObjectMapper objectMapper;
 
     @Value("${ai.api.key:demo-mode}")
@@ -26,8 +33,12 @@ public class AiSuggestionService {
     @Value("${ai.api.model:claude-haiku-5-5}")
     private String model;
 
-    public AiSuggestionService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
-        this.webClient = webClientBuilder.build();
+    public AiSuggestionService(RestClient.Builder restClientBuilder, ObjectMapper objectMapper) {
+        // Without timeouts a slow or unreachable API would hang the workflow thread indefinitely.
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(5));
+        requestFactory.setReadTimeout(Duration.ofSeconds(20));
+        this.restClient = restClientBuilder.requestFactory(requestFactory).build();
         this.objectMapper = objectMapper;
     }
 
@@ -52,20 +63,24 @@ public class AiSuggestionService {
                 )
             );
 
-            String response = webClient.post()
+            String response = restClient.post()
                 .uri(apiUrl)
                 .header("x-api-key", apiKey)
                 .header("anthropic-version", "2023-06-01")
-                .header("Content-Type", "application/json")
-                .bodyValue(requestBody)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(requestBody)
                 .retrieve()
-                .bodyToMono(String.class)
-                .block();
+                .body(String.class);
 
-            JsonNode root = objectMapper.readTree(response);
-            return root.path("content").get(0).path("text").asText();
+            JsonNode text = objectMapper.readTree(response).path("content").path(0).path("text");
+            if (text.isMissingNode() || text.asText().isBlank()) {
+                throw new IllegalStateException("No text in API response");
+            }
+            return text.asText();
 
         } catch (Exception e) {
+            // Previously swallowed silently, which hid a retired model ID and bad API keys.
+            log.warn("AI suggestion failed for workflow {} ({}); using built-in suggestion", workflow.getId(), e.getMessage());
             return buildDemoSuggestion(workflow, steps);
         }
     }
